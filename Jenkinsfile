@@ -35,7 +35,7 @@ pipeline {
 
         stage('Publish Test Results') {
             steps {
-                junit 'target/surefire-reports/*.xml'
+                archiveArtifacts artifacts: 'target/surefire-reports/*.xml', allowEmptyArchive: true
             }
         }
         // stage('Check Test Report Files') {
