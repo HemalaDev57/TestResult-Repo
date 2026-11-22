@@ -1,0 +1,27 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: CBP-50985 payload repro - medium (~1.23 MiB body)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cbp-50985-payload-repro
+
+jobs:
+  size-medium:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+
+      - name: Generate JUnit reports (~2 KB stdout per test, 19 files x 25 tests)
+        kind: test
+        uses: docker://alpine:3.20
+        run: sh .cloudbees/scripts/gen-junit.sh tmp/integration-test-reports 19 25 2
+
+      - name: Publish test results
+        if: ${{ always() }}
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./tmp/integration-test-reports/*.xml

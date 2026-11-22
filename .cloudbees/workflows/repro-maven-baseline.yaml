@@ -1,0 +1,27 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: CBP-50985 payload repro - maven baseline (real tests)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cbp-50985-payload-repro
+
+jobs:
+  maven-baseline:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+
+      - name: Run Maven tests
+        kind: test
+        uses: docker://maven:3.9.9-eclipse-temurin-17
+        run: mvn -B test -Dmaven.test.failure.ignore=true
+
+      - name: Publish Maven test results
+        if: ${{ always() }}
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./target/surefire-reports/*.xml
