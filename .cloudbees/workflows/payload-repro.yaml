@@ -1,0 +1,78 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: CBP-50985 publish-test-results payload size repro
+
+# Reproduces "publish-test-results: Error while Posting results to Platform! with StatusCode - 500"
+# (CBP-50985). api-gateway publishes the whole results body as ONE NATS message, and the NATS
+# server rejects anything over ~1 MiB ("nats: maximum payload exceeded"), which becomes a 500.
+#
+# Each job publishes 19 JUnit files x 25 test cases (475 tests, like the unify-mcp-server
+# integration-test job) with a different amount of <system-out> per test case:
+#   size-small  ~1 KB/test -> JSON body ~0.6 MB  -> expected: upload OK
+#   size-medium ~2 KB/test -> JSON body ~1.2 MB  -> expected: 500 on an action without the size cap
+#   size-large  ~4 KB/test -> JSON body ~2.4 MB  -> expected: 500 on an action without the size cap
+# The job that first fails shows where the limit sits.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cbp-50985-payload-repro
+
+jobs:
+  # Normal, small results straight from this repo's real Maven tests (baseline).
+  maven-baseline:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+
+      - name: Run Maven tests
+        kind: test
+        uses: docker://maven:3.9.9-eclipse-temurin-17
+        run: mvn -B test -Dmaven.test.failure.ignore=true
+
+      - name: Publish Maven test results
+        if: ${{ always() }}
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./target/surefire-reports/*.xml
+
+  size-small:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+      - name: Generate JUnit reports (~1 KB stdout per test)
+        uses: docker://alpine:3.20
+        run: sh .cloudbees/scripts/gen-junit.sh tmp/integration-test-reports 19 25 1
+      - name: Publish test results
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./tmp/integration-test-reports/*.xml
+
+  size-medium:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+      - name: Generate JUnit reports (~2 KB stdout per test)
+        uses: docker://alpine:3.20
+        run: sh .cloudbees/scripts/gen-junit.sh tmp/integration-test-reports 19 25 2
+      - name: Publish test results
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./tmp/integration-test-reports/*.xml
+
+  size-large:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+      - name: Generate JUnit reports (~4 KB stdout per test)
+        uses: docker://alpine:3.20
+        run: sh .cloudbees/scripts/gen-junit.sh tmp/integration-test-reports 19 25 4
+      - name: Publish test results
+        uses: cloudbees-io/publish-test-results@v2
+        with:
+          test-type: JUNIT
+          results-path: ./tmp/integration-test-reports/*.xml
